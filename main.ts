@@ -99,6 +99,27 @@ if (dossierBytes <= 0) {
   process.exit(1);
 }
 
+// Hardening check on the board as written: ranks must run exactly 1..N in
+// file order and implied values must not rise with rank. A board that fails
+// either is refused here, before success is reported. Read-only: this check
+// writes nothing and changes no output bytes.
+const rowsBack = boardBack.rows as { rank?: unknown; implied_value_usd?: unknown }[];
+for (let i = 0; i < rowsBack.length; i++) {
+  const row = rowsBack[i]!;
+  if (row.rank !== i + 1) {
+    process.stderr.write(`token radar: board.json row ${i + 1} carries rank ${String(row.rank)}, expected ${i + 1}\n`);
+    process.exit(1);
+  }
+  if (typeof row.implied_value_usd !== 'number' || !Number.isSafeInteger(row.implied_value_usd) || row.implied_value_usd <= 0) {
+    process.stderr.write(`token radar: board.json row ${i + 1} carries implied value ${String(row.implied_value_usd)}\n`);
+    process.exit(1);
+  }
+  if (i > 0 && (row.implied_value_usd as number) > (rowsBack[i - 1]!.implied_value_usd as number)) {
+    process.stderr.write(`token radar: board.json row ${i + 1} outranks row ${i} on implied value\n`);
+    process.exit(1);
+  }
+}
+
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${radar.early_size} early, ${radar.live_size} live set aside)\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')} (3 files), ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')} (${dossierBytes} bytes)\n`,
